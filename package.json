@@ -1,0 +1,46 @@
+{
+  "name": "payroll-app",
+  "productName": "برنامج الرواتب",
+  "version": "1.0.0",
+  "description": "برنامج رواتب عربي لسطح المكتب يصدّر ملف تحميل بطاقات الرواتب للبنك",
+  "main": "main.js",
+  "author": "GAMAL",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test",
+    "dist": "electron-builder --win portable nsis --x64",
+    "dist:linux-host": "electron-builder --win portable nsis --x64 -c.win.signAndEditExecutable=false"
+  },
+  "devDependencies": {
+    "electron": "44.7.0",
+    "electron-builder": "26.17.0"
+  },
+  "build": {
+    "appId": "com.payroll.desktop",
+    "productName": "برنامج الرواتب",
+    "files": [
+      "main.js",
+      "preload.js",
+      "src/**/*",
+      "build/icon.png"
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "shortcutName": "برنامج الرواتب",
+      "createDesktopShortcut": true,
+      "artifactName": "payroll-${version}-setup.exe"
+    },
+    "portable": {
+      "artifactName": "payroll-${version}-portable.exe"
+    }
+  }
+}
