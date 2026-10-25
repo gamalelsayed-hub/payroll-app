@@ -81,3 +81,22 @@ test('حالة البطاقة', () => {
   assert.strictEqual(C.cardStatus({ cardExpiry: '' }, t).code, 'unknown');
   assert.strictEqual(C.cardStatus({ cardExpiry: '2027-01-31' }, '2026-12-10').code, 'nextMonth');
 });
+
+test('استيراد مسير سابق من ملف البنك يعيد إنتاج نفس الملف', () => {
+  const recs = [
+    { empNo: '20', cardNo: '1111222233334444555', name: 'خالد', nationalId: '2000000003', amount: 250000, basic: 60000, housing: 0, other: 200000, deductions: 10000 },
+    { empNo: '10', cardNo: '1111222233334444666', name: 'منى', nationalId: '1000000004', amount: 400000, basic: 400000, housing: 0, other: 0, deductions: 0 },
+  ];
+  const file = C.buildBankFile(recs, '20260830');
+  const data = { ...C.emptyData(), employees: [emp({ empNo: '10', name: 'منى', basic: 1, branch: '1002' })] };
+  let n = 0;
+  const { snapshot, added } = C.runFromBankFile(data, C.parseBankFile(file), '2026-08', () => 'new' + ++n);
+  assert.strictEqual(added.length, 1);
+  assert.strictEqual(added[0].active, false);
+  data.employees.push(...added);
+  data.runs['2026-08'] = { status: 'closed', lines: {}, snapshot };
+  const again = C.buildBankFile(C.bankRecords(C.computeRun(data, '2026-08')), '20260830');
+  // نفس ترتيب الملف الأصلي
+  assert.deepStrictEqual([...again], [...file]);
+  assert.strictEqual(C.computeRun(data, '2026-08').reduce((a, r) => a + r.net, 0), 650000);
+});

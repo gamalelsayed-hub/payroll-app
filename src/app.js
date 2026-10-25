@@ -629,7 +629,7 @@ function payrollSheetHtml(ym) {
     <table><thead><tr><th>م</th><th>الرقم</th><th>اسم الموظف</th><th class="n">الأيام</th><th class="n">الأساسي</th><th class="n">بدل السكن</th><th class="n">بدلات أخرى</th>
     <th class="n">إجمالي الاستحقاق</th><th class="n">السلف</th><th class="n">خصومات أخرى</th><th class="n">إجمالي الاستقطاع</th><th class="n">صافي الراتب</th><th>الصرف</th></tr></thead>
     <tbody>${body}<tr class="gt"><td colspan="4">الإجمالي الكلي (${rows.length} موظف)</td>${tot(rows)}<td></td></tr></tbody></table>
-    <div class="sign"><div>المحاسب</div><div>المدير المالي</div><div>المدير العام</div></div>`, true);
+    <div class="sign"><div>المحاسب</div><div>المدير المالي</div><div>مدير العمليات</div><div>المدير العام</div></div>`, true);
 }
 
 function payslipsHtml(ym, empIds) {
@@ -718,6 +718,8 @@ views.reports = (el) => {
   el.innerHTML = `
     <h1>الكشوفات</h1>
     <p class="sub">كشوفات قابلة للطباعة والحفظ PDF.</p>
+    <div class="toolbar"><button class="btn primary" id="rImport">استيراد مسير شهر سابق من ملف البنك (txt)</button>
+      <span class="sub" style="margin:0">لإضافة الشهور السابقة للأرشيف والكشوفات</span></div>
     <div class="card"><h2>المسيرات الشهرية</h2>
       <div class="table-wrap"><table><thead><tr><th>الشهر</th><th>الحالة</th><th class="num">عدد الموظفين</th><th class="num">إجمالي الاستحقاق</th><th class="num">الاستقطاع</th><th class="num">الصافي</th><th></th></tr></thead><tbody>
       ${months.map((ym) => {
@@ -734,6 +736,7 @@ views.reports = (el) => {
   $$('[data-sheet]', el).forEach((b) => (b.onclick = () => showReport(payrollSheetHtml(b.dataset.sheet), `مسير رواتب ${b.dataset.sheet}.pdf`, true)));
   $$('[data-slips]', el).forEach((b) => (b.onclick = () => showReport(payslipsHtml(b.dataset.slips), `قسائم رواتب ${b.dataset.slips}.pdf`)));
   $$('[data-open]', el).forEach((b) => (b.onclick = () => { ui.month = b.dataset.open; go('payroll'); }));
+  $('#rImport', el).onclick = importPastRun;
   const rs = $('#rStmt', el); if (rs) rs.onclick = () => { const v = $('#rEmp', el).value; if (v) employeeStatementDialog(v); };
 };
 
@@ -758,6 +761,7 @@ views.settings = (el) => {
         <button class="btn" id="dBackup">حفظ نسخة احتياطية</button>
         <button class="btn" id="dRestore">استعادة نسخة احتياطية</button>
         <button class="btn primary" id="dImport">استيراد الموظفين من ملف بنك سابق (txt)</button>
+        <button class="btn" id="dImportRun">استيراد مسير شهر سابق (txt)</button>
       </div>
     </div>`;
   $('#sCo', el).onchange = (ev) => { data.settings.companyName = ev.target.value.trim(); save(); renderAlertBadge(); };
@@ -790,7 +794,46 @@ views.settings = (el) => {
     save(); render(); toast('تمت استعادة البيانات');
   };
   $('#dImport', el).onclick = importBankFile;
+  $('#dImportRun', el).onclick = importPastRun;
 };
+
+// استيراد مسير شهر سابق من ملف البنك كمسير معتمد (أرشيف)
+async function importPastRun() {
+  const f = await bridge.openFile([{ name: 'ملف البنك', extensions: ['txt'] }]);
+  if (!f) return;
+  let rows;
+  try { rows = C.parseBankFile(f.bytes); } catch (err) { toast('تعذر قراءة الملف: ' + err.message, 6000); return; }
+  if (!rows.length) { toast('الملف فارغ'); return; }
+  const d = rows[0].valueDate;
+  const guess = /^\d{8}$/.test(d) ? `${d.slice(0, 4)}-${d.slice(4, 6)}` : currentMonth();
+  const unknown = rows.filter((r) => !data.employees.some((e) => e.empNo === r.empNo)).length;
+  const total = rows.reduce((a, r) => a + r.amount, 0);
+  const box = openModal(`<h2>استيراد مسير من ${esc(f.name)}</h2>
+    <div class="grid2"><div class="field"><label>شهر المسير</label><input type="month" id="pmMonth" value="${guess}">
+      <span class="hint">تم تحديده من تاريخ التحويل داخل الملف (${esc(d)})</span></div></div>
+    <div class="kv" style="margin:14px 0"><div>عدد الموظفين</div><div><b>${rows.length}</b></div>
+      <div>إجمالي المبلغ</div><div><b>${money(total)}</b> ريال</div>
+      <div>غير موجودين في البرنامج</div><div>${unknown} ${unknown ? '(سيضافون كموظفين موقوفين، فعّلهم إن كانوا على رأس العمل)' : ''}</div></div>
+    <div id="pmWarn"></div>
+    <p class="sub">يُحفظ المسير معتمداً كما هو في الملف (الأساسي والبدلات والاستقطاع والصافي). الموظفون الذين صُرف لهم بغير البطاقة لا يكونون في ملف البنك.</p>
+    <div class="modal-actions"><button class="btn primary" id="pmGo">استيراد</button><button class="btn" id="pmCancel">إلغاء</button></div>`);
+  const warn = () => {
+    const ym = $('#pmMonth', box).value;
+    const r = data.runs[ym];
+    $('#pmWarn', box).innerHTML = r ? `<div class="alert warn">يوجد مسير ${r.status === 'closed' ? 'معتمد' : 'مسودة'} لشهر ${monthLabel(ym)} وسيتم استبداله.</div>` : '';
+  };
+  $('#pmMonth', box).onchange = warn; warn();
+  $('#pmCancel', box).onclick = closeModal;
+  $('#pmGo', box).onclick = () => {
+    const ym = $('#pmMonth', box).value;
+    if (!ym) return;
+    const { snapshot, added } = C.runFromBankFile(data, rows, ym, uid);
+    data.employees.push(...added);
+    data.runs[ym] = { status: 'closed', closedAt: today(), payDate: `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}`, importedFrom: f.name, lines: {}, snapshot };
+    save(); closeModal(); render();
+    toast(`تم استيراد مسير ${monthLabel(ym)}: ${rows.length} موظف${added.length ? `، وأضيف ${added.length} موظف موقوف` : ''}`, 6000);
+  };
+}
 
 async function importBankFile() {
   const f = await bridge.openFile([{ name: 'ملف البنك', extensions: ['txt'] }]);

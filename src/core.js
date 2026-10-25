@@ -252,6 +252,32 @@
     return { code: 'ok', label: 'سارية' };
   }
 
+  // تحويل ملف بنك لشهر سابق إلى مسير معتمد (للأرشيف والكشوفات)
+  // يعيد صفوف المسير والموظفين غير الموجودين (يضافون موقوفين)
+  function runFromBankFile(data, rows, ym, newId) {
+    const mdays = daysInMonth(ym);
+    const added = [];
+    const snapshot = rows.map((r) => {
+      let emp = data.employees.find((e) => e.empNo === r.empNo);
+      if (!emp) {
+        emp = {
+          id: newId(), empNo: r.empNo, name: r.name, nationalId: r.nationalId, branch: '', cardNo: r.cardNo, cardExpiry: '',
+          payByCard: true, active: false, basic: r.basic, housing: r.housing, other: r.other, mobile: '',
+          notes: `أضيف من ملف بنك شهر ${ym}`,
+        };
+        added.push(emp);
+      }
+      const snapEmp = { ...JSON.parse(JSON.stringify(emp)), name: r.name, cardNo: r.cardNo, nationalId: r.nationalId };
+      return {
+        emp: snapEmp, days: mdays, mdays, basic: r.basic, housing: r.housing, other: r.other, bonus: 0,
+        gross: r.basic + r.housing + r.other, loanDeductions: {}, loanTotal: 0, extraDed: r.deductions,
+        extraDedNote: r.deductions ? 'استقطاع (من ملف البنك)' : '', deductions: r.deductions, net: r.amount, line: {},
+      };
+    });
+    // نحافظ على ترتيب الملف الأصلي ليُعاد تصديره كما هو
+    return { snapshot, added };
+  }
+
   function emptyData() {
     return { version: 1, settings: { companyName: '', opCode: '2' }, branches: [], employees: [], loans: [], runs: {} };
   }
@@ -261,6 +287,6 @@
     toHalalas, fromHalalas, fmt, daysInMonth, digits,
     LAYOUT, RECORD_LENGTH, buildRecord, buildBankFile, parseBankFile,
     loanPaid, loanRemaining, computeLine, computeRun, runEmployees, sortEmployees,
-    bankRecords, validateRecords, cardStatus, emptyData,
+    bankRecords, validateRecords, cardStatus, emptyData, runFromBankFile,
   };
 });
