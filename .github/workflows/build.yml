@@ -36,8 +36,16 @@ jobs:
           name: payroll-windows
           path: |
             dist/*.exe
+      - name: Read version
+        id: version
+        shell: bash
+        run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+      # كل دمج على main ينشر نسخة في صفحة Releases (رابط تحميل ثابت)
       - name: Release
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: برنامج الرواتب ${{ steps.version.outputs.version }}
+          body: حمّل ملف setup للتثبيت على الجهاز، أو ملف portable للتشغيل مباشرة بدون تثبيت.
           files: dist/*.exe
