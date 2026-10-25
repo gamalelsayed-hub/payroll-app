@@ -1,0 +1,11 @@
+node_modules/
+dist/
+*.log
+# لا ترفع بيانات حقيقية أو ملفات البنك إلى المستودع
+data*.json
+seed*.json
+*.txt
+!test/fixtures/*.txt
+*.xls
+*.xlsx
+*.pdf
