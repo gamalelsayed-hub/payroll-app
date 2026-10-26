@@ -1,7 +1,7 @@
 {
   "name": "payroll-app",
   "productName": "برنامج الرواتب",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "برنامج رواتب عربي لسطح المكتب يصدّر ملف تحميل بطاقات الرواتب للبنك",
   "main": "main.js",
   "author": "GAMAL",
