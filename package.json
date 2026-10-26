@@ -1,7 +1,7 @@
 {
   "name": "payroll-app",
   "productName": "برنامج الرواتب",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "description": "برنامج رواتب عربي لسطح المكتب يصدّر ملف تحميل بطاقات الرواتب للبنك",
   "main": "main.js",
   "author": "GAMAL",
@@ -10,8 +10,8 @@
   "scripts": {
     "start": "electron .",
     "test": "node --test",
-    "dist": "electron-builder --win portable nsis --x64",
-    "dist:linux-host": "electron-builder --win portable nsis --x64 -c.win.signAndEditExecutable=false"
+    "dist": "electron-builder --win portable nsis --x64 --publish never",
+    "dist:linux-host": "electron-builder --win portable nsis --x64 --publish never -c.win.signAndEditExecutable=false"
   },
   "devDependencies": {
     "electron": "44.7.0",

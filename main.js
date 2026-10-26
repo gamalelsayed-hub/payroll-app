@@ -1,11 +1,14 @@
 const { app, BrowserWindow, ipcMain, dialog, shell, Menu } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const { extractItems } = require('./src/pdftext');
+const { readFirstSheet } = require('./src/xlsx');
 
 // مجلد البيانات داخل "المستندات" ليسهل نسخه احتياطياً
 const dataDir = () => path.join(app.getPath('documents'), 'برنامج الرواتب');
 const dataFile = () => path.join(dataDir(), 'data.json');
 const backupDir = () => path.join(dataDir(), 'نسخ احتياطية');
+const attachDir = () => path.join(dataDir(), 'مرفقات');
 
 let win;
 
@@ -83,6 +86,38 @@ ipcMain.handle('pdf:save', async (_e, { html, defaultName, landscape }) => {
 });
 
 ipcMain.handle('file:show', (_e, p) => shell.showItemInFolder(p));
+
+ipcMain.handle('file:openMany', async (_e, { filters }) => {
+  const r = await dialog.showOpenDialog(win, { properties: ['openFile', 'multiSelections'], filters });
+  if (r.canceled) return [];
+  return r.filePaths.map((p) => ({ name: path.basename(p), bytes: new Uint8Array(fs.readFileSync(p)) }));
+});
+
+ipcMain.handle('pdf:extract', (_e, bytes) => extractItems(Buffer.from(bytes)));
+ipcMain.handle('xlsx:read', (_e, bytes) => readFirstSheet(Buffer.from(bytes)));
+
+// المرفقات تُنسخ داخل مجلد البيانات ويُحفظ مسارها النسبي
+ipcMain.handle('attach:add', async (_e, { folder }) => {
+  const r = await dialog.showOpenDialog(win, { properties: ['openFile', 'multiSelections'] });
+  if (r.canceled) return [];
+  const dir = path.join(attachDir(), folder);
+  fs.mkdirSync(dir, { recursive: true });
+  return r.filePaths.map((src) => {
+    const base = path.basename(src);
+    let name = base, i = 1;
+    while (fs.existsSync(path.join(dir, name))) name = `${path.parse(base).name} (${i++})${path.extname(base)}`;
+    fs.copyFileSync(src, path.join(dir, name));
+    return { name, rel: path.join(folder, name), addedAt: new Date().toISOString().slice(0, 10) };
+  });
+});
+
+const attachPath = (rel) => {
+  const p = path.resolve(attachDir(), rel);
+  if (!p.startsWith(path.resolve(attachDir()) + path.sep)) throw new Error('مسار غير صالح');
+  return p;
+};
+ipcMain.handle('attach:open', (_e, rel) => shell.openPath(attachPath(rel)));
+ipcMain.handle('attach:remove', (_e, rel) => { const p = attachPath(rel); if (fs.existsSync(p)) fs.unlinkSync(p); return true; });
 
 app.whenReady().then(createWindow);
 app.on('window-all-closed', () => app.quit());
