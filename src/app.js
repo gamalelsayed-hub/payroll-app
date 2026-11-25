@@ -995,7 +995,7 @@ async function importBankFile() {
           basic: r.basic, housing: r.housing, other: r.other, mobile: '', notes: '' });
         added++;
       } else {
-        if (upCard) Object.assign(e, { cardNo: r.cardNo, nationalId: r.nationalId, name: r.name });
+        if (upCard) Object.assign(e, { cardNo: r.cardNo, nationalId: r.nationalId, name: r.name, payByCard: true });
         if (upSal) Object.assign(e, { basic: r.basic, housing: r.housing, other: r.other });
         if (upCard || upSal) updated++;
       }
@@ -1125,12 +1125,19 @@ async function importCardsFile() {
   const changes = [...byEmp.values()];
   const cardChanges = changes.filter(({ e, c }) => e.cardNo !== c.cardNo);
   const missing = data.employees.filter((e) => e.active !== false && e.payByCard !== false && !cards.some((c) => c.cardNo === e.cardNo));
+  // موظفون لهم بطاقة في الملف ومسجلون في البرنامج بصرف بدون بطاقة: يتحولون للبطاقة
+  const toCard = changes.filter(({ e }) => e.payByCard === false);
+  const noId = changes.filter(({ e }) => String(e.nationalId || '').length !== 10);
   const box = openModal(`<h2>تحديث البطاقات من ${esc(f.name)}</h2>
     <div class="kv" style="margin-bottom:12px"><div>عدد البطاقات في الملف</div><div><b>${cards.length}</b></div>
-      <div>مطابقة لموظفين</div><div>${changes.length}</div><div>تواريخ انتهاء في الملف</div><div>${cards.some((c) => c.expiry) ? 'نعم، سيتم تحديثها' : 'لا يوجد عمود تاريخ انتهاء'}</div></div>
+      <div>مطابقة لموظفين</div><div>${changes.length}</div>
+      <div>يتحولون للصرف بالبطاقة</div><div>${toCard.length}</div><div>تواريخ انتهاء في الملف</div><div>${cards.some((c) => c.expiry) ? 'نعم، سيتم تحديثها' : 'لا يوجد عمود تاريخ انتهاء'}</div></div>
     ${cardChanges.length ? `<h3>أرقام بطاقات مختلفة عن البرنامج</h3><div class="table-wrap" style="max-height:30vh"><table><thead><tr><th>تحديث</th><th>الموظف</th><th>البطاقة في البرنامج</th><th>البطاقة في الملف</th><th>الانتهاء</th><th>الحالة</th></tr></thead><tbody>
       ${cardChanges.map(({ e, c }, i) => `<tr><td><input type="checkbox" data-cc="${i}" ${!e.cardNo ? 'checked' : ''} style="width:auto"></td><td>${esc(e.empNo)} - ${esc(e.name)}</td><td>${esc(e.cardNo || '—')}</td><td>${esc(c.cardNo)}</td><td>${esc(c.expiry || '—')}</td><td>${esc(c.status)}</td></tr>`).join('')}
       </tbody></table></div>` : '<div class="alert info">أرقام البطاقات في الملف مطابقة للبرنامج.</div>'}
+    ${noId.length ? `<div class="alert warn" style="margin-top:10px"><b>${noId.length} موظف بدون رقم هوية:</b> ملف البطاقات لا يحتوي رقم الهوية، وملف البنك يحتاجه.
+      أكمله من «استيراد الموظفين من ملف بنك سابق (txt)» في هذه الصفحة (يأخذ الهوية من ملف أي شهر سابق)، أو من ملف كل موظف.
+      <div class="hint">${noId.map(({ e }) => esc(e.empNo)).join('، ')}</div></div>` : ''}
     ${missing.length ? `<div class="alert warn" style="margin-top:10px"><b>موظفون على بطاقات وبطاقاتهم غير موجودة في الملف (ربما أُقفلت):</b><ul>${missing.map((e) => `<li>${esc(e.empNo)} - ${esc(e.name)} (${esc(e.cardNo)})</li>`).join('')}</ul></div>` : ''}
     ${unknown.length ? `<div class="alert info"><b>بطاقات لموظفين غير موجودين في البرنامج:</b><ul>${unknown.map((c) => `<li>${esc(c.empNo)} - ${esc(c.name)} (${esc(c.cardNo)})</li>`).join('')}</ul></div>` : ''}
     <div class="modal-actions"><button class="btn primary" id="cdGo">تحديث</button><button class="btn" id="cdCancel">إلغاء</button></div>`, true);
@@ -1141,8 +1148,8 @@ async function importCardsFile() {
       const i = cardChanges.findIndex((x) => x.e === e);
       const takeCard = i < 0 || $(`[data-cc="${i}"]`, box).checked;
       if (!takeCard) continue;
-      // لا يدخل ملف البنك إلا إذا اكتمل رقم الهوية
-      if (e.cardNo !== c.cardNo) { e.cardNo = c.cardNo; if (String(e.nationalId || '').length === 10) e.payByCard = true; }
+      e.cardNo = c.cardNo;
+      e.payByCard = true;
       if (c.expiry) e.cardExpiry = c.expiry;
       e.cardStatus = c.status;
       e.cardBalance = c.balance;
